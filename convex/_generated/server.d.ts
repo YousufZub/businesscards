@@ -9,6 +9,7 @@
 
 import type {
   ActionBuilder,
+  HttpActionBuilder,
   MutationBuilder,
   QueryBuilder,
   GenericActionCtx,
@@ -27,3 +28,4 @@ export declare const mutation: MutationBuilder<DataModel, 'public'>;
 export declare const internalMutation: MutationBuilder<DataModel, 'internal'>;
 export declare const action: ActionBuilder<DataModel, 'public'>;
 export declare const internalAction: ActionBuilder<DataModel, 'internal'>;
+export declare const httpAction: HttpActionBuilder;

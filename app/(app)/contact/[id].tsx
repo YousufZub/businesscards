@@ -207,9 +207,14 @@ export default function ContactDetailScreen() {
         <Card className="mx-5 mb-4 p-4">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-slate-400 text-xs uppercase tracking-widest">Notes</Text>
-            <TouchableOpacity onPress={() => router.push(`/(app)/contact/${id}/notes`)}>
-              <Ionicons name="add" size={20} color="#6366F1" />
-            </TouchableOpacity>
+            <View className="flex-row gap-3">
+              <TouchableOpacity onPress={() => router.push(`/(app)/contact/${id}/timeline`)}>
+                <Ionicons name="time-outline" size={20} color="#64748B" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push(`/(app)/contact/${id}/notes`)}>
+                <Ionicons name="add" size={20} color="#6366F1" />
+              </TouchableOpacity>
+            </View>
           </View>
           {notes && notes.length > 0 ? (
             notes.slice(0, 2).map((note) => (

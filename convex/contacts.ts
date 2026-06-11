@@ -136,6 +136,28 @@ export const search = query({
   },
 });
 
+export const getStats = query({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const contacts = await ctx.db
+      .query('contacts')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect();
+
+    const now = Date.now();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+    return {
+      total:        contacts.length,
+      today:        contacts.filter((c) => c.createdAt >= todayStart.getTime()).length,
+      thisWeek:     contacts.filter((c) => c.createdAt >= weekAgo).length,
+      followUpsDue: contacts.filter((c) => c.followUpDate !== undefined && c.followUpDate <= now).length,
+    };
+  },
+});
+
 export const toggleFavorite = mutation({
   args: { contactId: v.id('contacts') },
   handler: async (ctx, args) => {
