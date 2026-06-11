@@ -13,6 +13,7 @@ export default defineSchema({
     profilePhoto: v.optional(v.string()),
     authProvider: v.union(v.literal('google'), v.literal('linkedin')),
     externalId:   v.string(),
+    pushToken:    v.optional(v.string()),
     createdAt:    v.number(),
   })
     .index('by_email',      ['email'])

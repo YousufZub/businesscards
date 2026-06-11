@@ -46,6 +46,13 @@ export const getById = query({
   },
 });
 
+export const updatePushToken = mutation({
+  args: { userId: v.id('users'), pushToken: v.string() },
+  handler: async (ctx, { userId, pushToken }) => {
+    await ctx.db.patch(userId, { pushToken });
+  },
+});
+
 export const updateProfile = mutation({
   args: {
     userId:      v.id('users'),

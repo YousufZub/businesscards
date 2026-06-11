@@ -1,4 +1,4 @@
-import { mutation, query } from './_generated/server';
+import { internalQuery, mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
 export const list = query({
@@ -167,5 +167,150 @@ export const toggleFavorite = mutation({
       favorite:  !contact.favorite,
       updatedAt: Date.now(),
     });
+  },
+});
+
+// ─── Organization sharing ─────────────────────────────────────────────────────
+
+export const shareWithOrg = mutation({
+  args: {
+    contactId:      v.id('contacts'),
+    organizationId: v.id('organizations'),
+  },
+  handler: async (ctx, { contactId, organizationId }) => {
+    await ctx.db.patch(contactId, { organizationId, isShared: true, updatedAt: Date.now() });
+  },
+});
+
+export const unshareFromOrg = mutation({
+  args: { contactId: v.id('contacts') },
+  handler: async (ctx, { contactId }) => {
+    await ctx.db.patch(contactId, { organizationId: undefined, isShared: false, updatedAt: Date.now() });
+  },
+});
+
+export const listOrgShared = query({
+  args: { organizationId: v.id('organizations') },
+  handler: async (ctx, { organizationId }) => {
+    return ctx.db
+      .query('contacts')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .order('desc')
+      .collect();
+  },
+});
+
+export const detectDuplicates = query({
+  args: { organizationId: v.id('organizations') },
+  handler: async (ctx, { organizationId }) => {
+    const contacts = await ctx.db
+      .query('contacts')
+      .withIndex('by_org', (q) => q.eq('organizationId', organizationId))
+      .collect();
+
+    const byEmail = new Map<string, typeof contacts>();
+    contacts.forEach((c) => {
+      if (!c.email) return;
+      const key = c.email.toLowerCase();
+      byEmail.set(key, [...(byEmail.get(key) ?? []), c]);
+    });
+
+    return Array.from(byEmail.values()).filter((g) => g.length > 1);
+  },
+});
+
+// ─── Follow-ups ───────────────────────────────────────────────────────────────
+
+export const getFollowUps = query({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const now = Date.now();
+    const contacts = await ctx.db
+      .query('contacts')
+      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .collect();
+
+    return contacts
+      .filter((c) => c.followUpDate !== undefined)
+      .sort((a, b) => (a.followUpDate ?? 0) - (b.followUpDate ?? 0))
+      .map((c) => ({
+        ...c,
+        isOverdue:  (c.followUpDate ?? 0) <= now,
+        daysUntil:  Math.ceil(((c.followUpDate ?? 0) - now) / (1000 * 60 * 60 * 24)),
+      }));
+  },
+});
+
+export const setFollowUpDate = mutation({
+  args: {
+    contactId:   v.id('contacts'),
+    followUpDate: v.optional(v.number()),
+  },
+  handler: async (ctx, { contactId, followUpDate }) => {
+    await ctx.db.patch(contactId, { followUpDate, updatedAt: Date.now() });
+  },
+});
+
+export const markFollowUpDone = mutation({
+  args: { contactId: v.id('contacts'), userId: v.id('users') },
+  handler: async (ctx, { contactId, userId }) => {
+    await ctx.db.patch(contactId, { followUpDate: undefined, updatedAt: Date.now() });
+    await ctx.db.insert('interactions', {
+      contactId,
+      userId,
+      type:      'follow_up_completed',
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// Internal query used by the cron job
+export const getOverdueFollowUpsInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const contacts = await ctx.db.query('contacts').collect();
+    const due = contacts.filter((c) => c.followUpDate !== undefined && c.followUpDate <= tomorrow);
+    return Promise.all(
+      due.map(async (contact) => {
+        const user = await ctx.db.get(contact.userId);
+        return { contact, pushToken: user?.pushToken };
+      }),
+    );
+  },
+});
+
+// ─── Relationship score ───────────────────────────────────────────────────────
+
+const INTERACTION_WEIGHTS: Record<string, number> = {
+  card_scanned:        5,
+  note_added:          10,
+  whatsapp_sent:       20,
+  linkedin_opened:     8,
+  email_sent:          15,
+  meeting_added:       25,
+  follow_up_completed: 30,
+};
+
+export const recalculateRelationshipScore = mutation({
+  args: { contactId: v.id('contacts') },
+  handler: async (ctx, { contactId }) => {
+    const interactions = await ctx.db
+      .query('interactions')
+      .withIndex('by_contact', (q) => q.eq('contactId', contactId))
+      .collect();
+
+    const now = Date.now();
+    let score  = 0;
+    for (const i of interactions) {
+      const weight  = INTERACTION_WEIGHTS[i.type] ?? 5;
+      const daysSince = (now - i.timestamp) / (1000 * 60 * 60 * 24);
+      const recency   = Math.max(0, 1 - daysSince / 365);
+      score += weight * (0.5 + 0.5 * recency);
+    }
+
+    const finalScore = Math.min(100, Math.round(score));
+    await ctx.db.patch(contactId, { relationshipScore: finalScore, updatedAt: now });
+    return finalScore;
   },
 });

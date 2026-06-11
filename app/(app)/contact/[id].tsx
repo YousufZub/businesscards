@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
-  Share,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,8 +61,16 @@ export default function ContactDetailScreen() {
   const logInteraction = useMutation(api.interactions.log);
   const toggleFav      = useMutation(api.contacts.toggleFavorite);
 
-  const [tagsExpanded, setTagsExpanded]     = useState(false);
-  const [whatsappOpen, setWhatsappOpen]     = useState(false);
+  const setFollowUpDate       = useMutation(api.contacts.setFollowUpDate);
+  const shareWithOrg          = useMutation(api.contacts.shareWithOrg);
+  const unshareFromOrg        = useMutation(api.contacts.unshareFromOrg);
+  const recalcScore           = useMutation(api.contacts.recalculateRelationshipScore);
+  const myOrg = useQuery(api.organizations.getMyOrg, contact ? { userId: contact.userId } : 'skip');
+
+  const [tagsExpanded,    setTagsExpanded]   = useState(false);
+  const [whatsappOpen,    setWhatsappOpen]   = useState(false);
+  const [followUpModal,   setFollowUpModal]  = useState(false);
+  const [followUpText,    setFollowUpText]   = useState('');
   const { user } = useAuthStore();
 
   if (!contact) {
@@ -230,6 +239,78 @@ export default function ContactDetailScreen() {
           )}
         </Card>
 
+        {/* Follow-up */}
+        <Card className="mx-5 mb-4 p-4">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-slate-400 text-xs uppercase tracking-widest">Follow-up</Text>
+            <TouchableOpacity onPress={() => setFollowUpModal(true)}>
+              <Ionicons name="calendar-outline" size={20} color="#6366F1" />
+            </TouchableOpacity>
+          </View>
+          {contact.followUpDate ? (
+            <View className="flex-row items-center mt-2">
+              <Ionicons
+                name={contact.followUpDate <= Date.now() ? 'warning-outline' : 'time-outline'}
+                size={15}
+                color={contact.followUpDate <= Date.now() ? '#EF4444' : '#6366F1'}
+              />
+              <Text className={`ml-2 text-sm ${contact.followUpDate <= Date.now() ? 'text-red-400' : 'text-slate-200'}`}>
+                {new Date(contact.followUpDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={() => setFollowUpModal(true)} className="mt-2">
+              <Text className="text-slate-500 text-sm">Tap to set a follow-up date</Text>
+            </TouchableOpacity>
+          )}
+        </Card>
+
+        {/* Org sharing */}
+        {myOrg && (
+          <Card className="mx-5 mb-4 p-4">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-slate-400 text-xs uppercase tracking-widest">Team Sharing</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (contact.isShared) {
+                    unshareFromOrg({ contactId: contact._id });
+                  } else {
+                    shareWithOrg({ contactId: contact._id, organizationId: myOrg._id });
+                  }
+                }}
+              >
+                <View className={`px-3 py-1 rounded-full ${contact.isShared ? 'bg-primary-500' : 'bg-surface-700'}`}>
+                  <Text className={`text-xs font-medium ${contact.isShared ? 'text-white' : 'text-slate-400'}`}>
+                    {contact.isShared ? 'Shared' : 'Private'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-slate-500 text-xs mt-1.5">
+              {contact.isShared
+                ? `Visible to all members of ${myOrg.name}`
+                : `Only visible to you. Tap to share with ${myOrg.name}.`}
+            </Text>
+          </Card>
+        )}
+
+        {/* Relationship score */}
+        {contact.relationshipScore !== undefined && contact.relationshipScore > 0 && (
+          <View className="mx-5 flex-row items-center mb-4 gap-3">
+            <View className="flex-1 bg-surface-800 rounded-xl px-4 py-2.5 flex-row items-center">
+              <Ionicons name="heart-outline" size={14} color="#6366F1" />
+              <Text className="text-slate-400 text-xs ml-1.5 flex-1">Relationship score</Text>
+              <Text className="text-primary-400 text-sm font-semibold">{contact.relationshipScore}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => recalcScore({ contactId: contact._id })}
+              className="bg-surface-700 rounded-xl px-3 py-2.5"
+            >
+              <Ionicons name="refresh-outline" size={16} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* OCR Confidence */}
         {contact.ocrConfidence !== undefined && (
           <View className="mx-5 flex-row items-center mb-4">
@@ -250,6 +331,80 @@ export default function ContactDetailScreen() {
           onSent={() => logInteraction({ contactId: contact._id, userId: contact.userId, type: 'whatsapp_sent' })}
         />
       )}
+
+      {/* Follow-up date picker modal */}
+      <Modal visible={followUpModal} transparent animationType="slide" onRequestClose={() => setFollowUpModal(false)}>
+        <View className="flex-1 bg-black/60 justify-end">
+          <View className="bg-surface-800 rounded-t-3xl p-5 pb-10">
+            <View className="flex-row items-center mb-5">
+              <Text className="text-slate-50 text-lg font-bold flex-1">Set Follow-up Date</Text>
+              <TouchableOpacity onPress={() => setFollowUpModal(false)}>
+                <Ionicons name="close" size={22} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick presets */}
+            {[
+              { label: 'Tomorrow',   days: 1  },
+              { label: 'This week',  days: 3  },
+              { label: 'Next week',  days: 7  },
+              { label: 'Next month', days: 30 },
+            ].map(({ label, days }) => (
+              <TouchableOpacity
+                key={label}
+                onPress={() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + days);
+                  d.setHours(9, 0, 0, 0);
+                  setFollowUpDate({ contactId: contact._id, followUpDate: d.getTime() });
+                  setFollowUpModal(false);
+                }}
+                className="bg-surface-700 rounded-xl px-5 py-3.5 mb-3"
+              >
+                <Text className="text-slate-200 text-sm font-medium">{label}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Custom date input */}
+            <TextInput
+              className="bg-surface-700 rounded-xl px-5 py-3.5 text-slate-100 text-sm mb-3"
+              placeholder="YYYY-MM-DD (custom date)"
+              placeholderTextColor="#64748B"
+              value={followUpText}
+              onChangeText={setFollowUpText}
+              keyboardType="numbers-and-punctuation"
+            />
+            <Button
+              label="Set Custom Date"
+              variant="secondary"
+              fullWidth
+              disabled={!followUpText.trim()}
+              onPress={() => {
+                const d = new Date(followUpText);
+                if (isNaN(d.getTime())) {
+                  Alert.alert('Invalid Date', 'Please enter a valid date in YYYY-MM-DD format.');
+                  return;
+                }
+                setFollowUpDate({ contactId: contact._id, followUpDate: d.getTime() });
+                setFollowUpText('');
+                setFollowUpModal(false);
+              }}
+            />
+            {contact.followUpDate && (
+              <Button
+                label="Clear Follow-up"
+                variant="ghost"
+                fullWidth
+                className="mt-2"
+                onPress={() => {
+                  setFollowUpDate({ contactId: contact._id, followUpDate: undefined });
+                  setFollowUpModal(false);
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

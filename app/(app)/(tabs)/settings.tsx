@@ -159,15 +159,26 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
+        {/* Organization */}
+        <View className="mb-6">
+          <Text className="text-slate-500 text-xs uppercase tracking-widest px-5 mb-2">
+            Organization
+          </Text>
+          <Card variant="outlined" className="mx-5">
+            <Row icon="business-outline"  label="My Organization" onPress={() => router.push('/(app)/org/')} />
+            <Row icon="people-outline"    label="Follow-ups"      onPress={() => router.push('/(app)/follow-ups')} />
+          </Card>
+        </View>
+
         {/* Data */}
         <View className="mb-6">
           <Text className="text-slate-500 text-xs uppercase tracking-widest px-5 mb-2">
             Data
           </Text>
           <Card variant="outlined" className="mx-5">
-            <Row icon="download-outline"  label="Export Contacts" onPress={() => {}} />
-            <Row icon="cloud-upload-outline" label="Import Contacts" onPress={() => {}} />
-            <Row icon="sync-outline"      label="Sync Status"    value="Synced" onPress={() => {}} />
+            <Row icon="download-outline"     label="Export Contacts" onPress={() => router.push('/(app)/export')} />
+            <Row icon="cloud-upload-outline" label="Import Contacts" onPress={() => router.push('/(app)/import')} />
+            <Row icon="sync-outline"         label="Sync Status"     value="Synced" onPress={() => {}} />
           </Card>
         </View>
 
