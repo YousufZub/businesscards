@@ -1,6 +1,6 @@
 import { httpRouter } from 'convex/server';
 import { httpAction } from './_generated/server';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 
 const http = httpRouter();
 
@@ -102,6 +102,42 @@ p{color:#94A3B8;}a{color:#6366F1;}</style></head>
 <body><p>Payment cancelled. Returning to the app…</p>
 <p><a href="cardvault://upgrade-cancel">Tap here</a> if it doesn't open.</p></body></html>`;
     return new Response(html, { headers: { 'Content-Type': 'text/html' } });
+  }),
+});
+
+// ─── Admin API ────────────────────────────────────────────────────────────────
+
+function isAdminAuthorized(req: Request): boolean {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) return false;
+  return req.headers.get('authorization') === `Bearer ${secret}`;
+}
+
+http.route({
+  path:    '/admin/stats',
+  method:  'GET',
+  handler: httpAction(async (ctx, req) => {
+    if (!isAdminAuthorized(req)) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    const stats = await ctx.runQuery(internal.admin.getStats, {});
+    return new Response(JSON.stringify(stats), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }),
+});
+
+http.route({
+  path:    '/admin/users',
+  method:  'GET',
+  handler: httpAction(async (ctx, req) => {
+    if (!isAdminAuthorized(req)) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    const users = await ctx.runQuery(internal.admin.listUsers, {});
+    return new Response(JSON.stringify(users), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
   }),
 });
 

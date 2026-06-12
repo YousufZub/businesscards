@@ -125,7 +125,13 @@ export default function ContactNotesScreen() {
       return;
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS:     true,
+        playsInSilentModeIOS:   true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid:      true,
+        playThroughEarpieceAndroid: false,
+      });
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
@@ -145,7 +151,12 @@ export default function ContactNotesScreen() {
 
     try {
       await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS:     false,
+        playsInSilentModeIOS:   false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid:      false,
+      });
       const uri = recordingRef.current.getURI()!;
       const duration = recordingDuration;
 

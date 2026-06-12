@@ -1,0 +1,8 @@
+# Playwright — local dev only, not needed on Vercel
+playwright-report/
+test-results/
+
+# Stray screenshot files from local testing
+*.png
+*.jpg
+*.jpeg

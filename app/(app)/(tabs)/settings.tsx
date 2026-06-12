@@ -12,6 +12,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../../src/stores/authStore';
 import { useSubscriptionStore } from '../../../src/stores/subscriptionStore';
+import { useSecurityStore } from '../../../src/stores/securityStore';
+import {
+  isBiometricAvailable,
+  authenticate,
+  saveBiometricPreference,
+  saveLockTimeout,
+  getBiometricType,
+  type BiometricType,
+} from '../../../src/lib/biometric';
 import { clearSession } from '../../../src/lib/auth';
 import Card from '../../../src/components/ui/Card';
 import Badge from '../../../src/components/ui/Badge';
@@ -55,12 +64,64 @@ function Row({ icon, label, value, badge, toggle, toggleValue, onToggle, onPress
   );
 }
 
+const LOCK_TIMEOUT_OPTIONS = [
+  { label: 'Immediately', seconds: 0 },
+  { label: '30 seconds',  seconds: 30 },
+  { label: '1 minute',    seconds: 60 },
+  { label: '5 minutes',   seconds: 300 },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, signOut } = useAuthStore();
   const { plan, scanCount, scanLimit } = useSubscriptionStore();
+  const { biometricEnabled, setBiometricEnabled, lockTimeout, setLockTimeout } = useSecurityStore();
   const [darkMode, setDarkMode] = React.useState(true);
   const [notifications, setNotifications] = React.useState(true);
+  const [biometricType, setBiometricType] = React.useState<BiometricType>('Biometric' as BiometricType);
+  const [biometricAvailable, setBiometricAvailable] = React.useState(false);
+
+  React.useEffect(() => {
+    isBiometricAvailable().then((available) => {
+      setBiometricAvailable(available);
+      if (available) getBiometricType().then(setBiometricType).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  const handleBiometricToggle = async (value: boolean) => {
+    if (value) {
+      const available = await isBiometricAvailable();
+      if (!available) {
+        Alert.alert(
+          'Not Available',
+          'Your device does not have biometric authentication enrolled. Set it up in device Settings first.',
+        );
+        return;
+      }
+      const confirmed = await authenticate(`Confirm to enable ${biometricType} lock`);
+      if (!confirmed) return;
+    }
+    setBiometricEnabled(value);
+    await saveBiometricPreference(value).catch(() => {});
+  };
+
+  const handleLockTimeout = () => {
+    const current = LOCK_TIMEOUT_OPTIONS.find((o) => o.seconds === lockTimeout)?.label ?? '30 seconds';
+    Alert.alert(
+      'Lock Timeout',
+      `Current: ${current}\n\nLock the app after being in background for:`,
+      [
+        ...LOCK_TIMEOUT_OPTIONS.map(({ label, seconds }) => ({
+          text: label + (seconds === lockTimeout ? ' ✓' : ''),
+          onPress: async () => {
+            setLockTimeout(seconds);
+            await saveLockTimeout(seconds).catch(() => {});
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -156,6 +217,30 @@ export default function SettingsScreen() {
             />
             <Row icon="language-outline"  label="Language"  value="English" onPress={() => {}} />
             <Row icon="color-palette-outline" label="Theme" value="Indigo" onPress={() => {}} />
+          </Card>
+        </View>
+
+        {/* Security */}
+        <View className="mb-6">
+          <Text className="text-slate-500 text-xs uppercase tracking-widest px-5 mb-2">
+            Security
+          </Text>
+          <Card variant="outlined" className="mx-5">
+            <Row
+              icon="finger-print-outline"
+              label={biometricAvailable ? `${biometricType} Lock` : 'Biometric Lock'}
+              toggle
+              toggleValue={biometricEnabled}
+              onToggle={handleBiometricToggle}
+            />
+            {biometricEnabled && (
+              <Row
+                icon="timer-outline"
+                label="Lock Timeout"
+                value={LOCK_TIMEOUT_OPTIONS.find((o) => o.seconds === lockTimeout)?.label ?? '30 seconds'}
+                onPress={handleLockTimeout}
+              />
+            )}
           </Card>
         </View>
 

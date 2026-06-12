@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import Card from '../../src/components/ui/Card';
 import Badge from '../../src/components/ui/Badge';
 import { useAuthStore } from '../../src/stores/authStore';
+import { hapticSuccess } from '../../src/lib/haptics';
 
 export default function FollowUpsScreen() {
   const router   = useRouter();
@@ -38,7 +39,7 @@ export default function FollowUpsScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Done',
-        onPress: () => markDone({ contactId, userId: user._id }),
+        onPress: () => { hapticSuccess(); markDone({ contactId, userId: user._id }); },
       },
     ]);
   };

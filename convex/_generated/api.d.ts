@@ -8,6 +8,7 @@
  */
 
 import type { ApiFromModules, FilterApi, FunctionReference } from 'convex/server';
+import type * as admin from '../admin.js';
 import type * as contacts from '../contacts.js';
 import type * as enrichment from '../enrichment.js';
 import type * as events from '../events.js';
@@ -20,6 +21,7 @@ import type * as users from '../users.js';
 
 type Mods = typeof import('../_generated/api');
 export type API = ApiFromModules<{
+  admin: typeof admin;
   contacts: typeof contacts;
   enrichment: typeof enrichment;
   events: typeof events;

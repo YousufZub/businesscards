@@ -34,3 +34,8 @@ ios/DerivedData/
 android/build/
 android/.gradle/
 android/app/build/
+
+# Website (Next.js build artifacts)
+website/.next/
+website/out/
+website/node_modules/
